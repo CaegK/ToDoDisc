@@ -16,6 +16,13 @@
 		</plugin>
   </plugins>
   </build>
+  <repositories>
+  <repository>
+    <id>dv8tion</id>
+    <name>m2-dv8tion</name>
+    <url>https://m2.dv8tion.net/releases</url>
+  </repository>
+  </repositories>
   <dependencies>
 		<dependency>
 			<groupId>org.openjfx</groupId>
@@ -41,6 +48,22 @@
 			<groupId>com.thedeanda</groupId>
 			<artifactId>lorem</artifactId>
 			<version>2.1</version>
+		</dependency>
+		<dependency>
+		    <groupId>net.dv8tion</groupId>
+		    <artifactId>JDA</artifactId>
+		    <version>4.3.0_307</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpclient</artifactId>
+			<version>4.5.13</version>
+		</dependency>
+		<dependency>
+		    <groupId>org.hsqldb</groupId>
+		    <artifactId>hsqldb</artifactId>
+		    <version>2.6.0</version>
+		    <scope>test</scope>
 		</dependency>
 	</dependencies>
 </project>
