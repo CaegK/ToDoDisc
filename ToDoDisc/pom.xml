@@ -63,7 +63,11 @@
 		    <groupId>org.hsqldb</groupId>
 		    <artifactId>hsqldb</artifactId>
 		    <version>2.6.0</version>
-		    <scope>test</scope>
+		</dependency>
+		<dependency>
+		    <groupId>commons-dbutils</groupId>
+		    <artifactId>commons-dbutils</artifactId>
+		    <version>1.7</version>
 		</dependency>
 	</dependencies>
 </project>
