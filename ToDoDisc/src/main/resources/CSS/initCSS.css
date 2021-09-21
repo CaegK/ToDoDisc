@@ -1,0 +1,43 @@
+* {
+	default-background: derive(black, 30%);
+}
+
+.root .label{
+	-fx-text-fill: white;
+}
+
+.root-grid{ 
+	-fx-padding: 20;
+	-fx-vgap: 15;
+}
+
+#welcome-label{
+	-fx-font-size: 72;
+	-fx-font-style: italic;
+}
+
+#bot-token-field{
+	-fx-background-color: derive(default-background, 10%);
+	-fx-text-fill: white;
+	-fx-highlight-fill: white;
+	-fx-highlight-text-fill: black;
+	-fx-font-size: 16;
+}
+
+#bot-token-label{
+	-fx-font-size: 16;
+}
+
+#connect-button{
+	-fx-background-color: derive(default-background, 10%);
+	-fx-text-fill: white;
+	-fx-font-size: 14;
+}
+
+#connect-button:hover{
+	-fx-background-color: derive(default-background, 30%);
+}
+
+#connect-button:pressed{
+	-fx-background-color: derive(default-background, 50%);
+}

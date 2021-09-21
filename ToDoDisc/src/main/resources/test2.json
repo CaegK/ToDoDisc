@@ -1,0 +1,22 @@
+{
+	"type":1,
+	"name":"test",
+	"description":"a test command",
+	"options":[
+				{
+				"type":6,
+				"name":"option2",
+				"description":"option 2 is a choice for users",
+				"required":true,
+				"choices":[],
+				"options":[]
+			},
+			{
+				"type":3,
+				"name":"option1",
+				"description":"option 1 is a subcommand",
+				"choices":[]
+			}
+	],
+	"default_permissions":true
+}

@@ -1,0 +1,6 @@
+/*C2*/SET SCHEMA PUBLIC
+CREATE SCHEMA TEST_SCHEMA AUTHORIZATION SA
+create table tab1(\u000acol1 int,\u000acol2str char (50)\u000a)
+create table test_schema.tab1(\u000acol1 int,\u000acol2str char (50)\u000a)
+drop table public.tab1
+DISCONNECT
