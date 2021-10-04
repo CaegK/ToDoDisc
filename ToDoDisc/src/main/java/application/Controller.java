@@ -1,9 +1,6 @@
 package application;
 
-import java.nio.channels.Channel;
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -16,22 +13,21 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+import commandBuilder.CommandBuilder;
 import database.SQLModel;
 import dialog.ErrorDialog;
 import javafx.application.Application;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.stage.Stage;
-import net.dv8tion.jda.api.entities.Category;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
-import net.dv8tion.jda.api.entities.PrivateChannel;
 import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
-import net.dv8tion.jda.api.requests.restaction.interactions.ReplyAction;
+import utilities.CommandLogger;
 import utilities.DateTimeUtility;
 import utilities.DiscTask;
 import view.DiscordView;
@@ -44,7 +40,9 @@ public class Controller extends Application{
 	final long MINUTES_TO_SEC = 60L;
 	final long SECONDS_TO_SEC = 1L;
 	
-	//GUI objects
+	/*
+	*GUI objects
+	*/
 	InitGUI initGui;
 	
 	SQLModel sqlModel;
@@ -52,32 +50,68 @@ public class Controller extends Application{
 	ExecutorService slashCommandExecutor = Executors.newFixedThreadPool(10);
 	
 	/*
-	 * REMINDER ITEMS
+	 * REMINDER OBJECTS
 	 */
 	ScheduledThreadPoolExecutor reminderExecutor = new ScheduledThreadPoolExecutor(10);
 	HashMap<Integer, Reminder> reminderMap = new HashMap<Integer, Reminder>();
 	int reminderIdx = 0;
 	
 	/*
-	 * REPEATER ITEMS
+	 * REPEATER OBJECTS
 	 */
 	ScheduledThreadPoolExecutor repeaterExecutor = new ScheduledThreadPoolExecutor(10);
 	HashMap<Integer, Repeater> repeaterMap = new HashMap<Integer, Repeater>();
 	int repeaterIdx = 0;
 	
-	//logic objects
-	String botToken;
+	/*
+	 * LOGGING INSTANCE
+	 */
+	CommandLogger logger;
 	
-	//EventHandlers
+	/*
+	 * InitGUI logic objects
+	 */
+	String botToken;
 	EventHandler<ActionEvent> connectToBot = (e) ->{
+		initGui.disableConnect();
 		botToken = initGui.botTokenField.getText();
+		//check for empty text in textfield
 		if(!botToken.trim().isEmpty()) {
 			discordView = new DiscordView(botToken, this);
+			if (!discordView.getJdaStatus()) {
+				ErrorDialog.showErrorDialog(null, "Could not connect to bot", true);
+				initGui.enableConnect();
+				return;
+			}
 		} else {
 			botToken = "";
 			ErrorDialog.showErrorDialog(null, "Not a valid token!", true);
 		}
 	};
+	Runnable updateStatusRunnable = () ->{
+		if(discordView != null) {
+			if(discordView.getJdaStatus()) { 
+				initGui.showJdaOnline();
+			} else {
+				initGui.showJdaOffline();
+			}
+		} else {
+			initGui.showJdaOffline();
+		}
+	};
+	Runnable updateDbConnRunnable = () -> {
+		if(sqlModel != null) { 
+			if(sqlModel.isConnected()) { 
+				initGui.showDbOnline();
+			} else {
+				initGui.showDbOffline();
+				sqlModel.restartConnection();
+			}
+		} else {
+			initGui.showDbOffline();
+		}
+	};
+	ScheduledExecutorService statusTimer;
 	
 	public void entryPoint(String[] args) {
 		launch(args);
@@ -96,24 +130,40 @@ public class Controller extends Application{
 			e.printStackTrace();
 		}
 		sqlModel = new SQLModel();
-		
 	}
 	
 	@Override
 	public void start(Stage primaryStage) throws Exception {
 		//initGUI setup
 		initGui = new InitGUI();
-		initGui.connectBtn.setOnAction(connectToBot);
+		initGui.jdaConnectBtn.setOnAction(connectToBot);
 		initGui.show();
+		//run status update thread
+		Thread updateStatusThread = new Thread(updateStatusRunnable);
+		Thread updateDbConnThread = new Thread(updateDbConnRunnable);
+		updateDbConnThread.setDaemon(true);
+		updateStatusThread.setDaemon(true);
+		statusTimer = Executors.newScheduledThreadPool(2);
+		statusTimer.scheduleAtFixedRate(updateDbConnThread, 1, 3, TimeUnit.SECONDS);
+		statusTimer.scheduleAtFixedRate(updateStatusThread, 1, 1, TimeUnit.SECONDS);
 		
 		initGui.frame.setOnClose(()->{
+			logger.logRaw("System", "Process ended by User");
 			sqlModel.close();
 			System.exit(0);
 		});
+		
+		logger = CommandLogger.getInstance();
+		logger.logRaw("System", "Process started");
 	}
 	
 	public void processSlashCommand(SlashCommandEvent e) {
 		slashCommandExecutor.submit(new SlashCommandHandler(e));
+	}
+	
+	public int[] setupCommand(String appId, String guildId) { 
+		CommandBuilder c = new CommandBuilder(initGui.botTokenField.getText().trim(), appId, guildId);
+		return c.updateAllCommands();
 	}
 	
 	public class Reminder implements Runnable {
@@ -123,6 +173,7 @@ public class Controller extends Application{
 		public Member userMem;
 		public int id;
 		public String[] dateTime;
+		@SuppressWarnings("rawtypes")
 		Future future;
 		public String desc = "";
 
@@ -141,10 +192,12 @@ public class Controller extends Application{
 			discordView.reminderDirect(this);
 		}
 		
+		@SuppressWarnings("rawtypes")
 		public Future getFuture() {
 			return future;
 		}
 
+		@SuppressWarnings("rawtypes")
 		public void setFuture(Future future) {
 			this.future = future;
 		}
@@ -163,6 +216,7 @@ public class Controller extends Application{
 		public String[] nextRepeat;
 		public String desc = "";
 		public int id;
+		@SuppressWarnings("rawtypes")
 		public Future future;
 		
 		public Repeater (DiscTask task, User user, Member member, Duration period, int id) { 
@@ -182,6 +236,7 @@ public class Controller extends Application{
 			this.nextRepeat = nextRepeat;
 		}
 		
+		@SuppressWarnings("rawtypes")
 		public void setFuture(Future future) { 
 			this.future = future;
 		}
@@ -196,15 +251,13 @@ public class Controller extends Application{
 	public class SlashCommandHandler implements Runnable {
 		SlashCommandEvent e;
 		public SlashCommandHandler(SlashCommandEvent e) {
+			logger.logCommand(e);
 			this.e = e;
 		}
 		
 		@Override
 		public void run() {
-			// bonk [user]
-			if (e.getName().equals("bonk")) {
-				commandBonk();
-			} else if (e.getName().equals("taskcategory")) {
+			if (e.getName().equals("taskcategory")) {
 				List<OptionMapping> options = e.getOptions();
 				//TODO permission checks 
 				// taskcategory create [name]
@@ -229,30 +282,31 @@ public class Controller extends Application{
 					commandTaskCreate(options);
 				} 
 				// task delete [name/id]
-				else if (e.getSubcommandGroup().equals("delete")) {
+				else if (e.getSubcommandName().equals("delete")) {
+					String idType = options.get(0).getAsString();
 					// task delete [name]
-					if(e.getSubcommandName().equals("name")) {
+					if(idType.equals("name")) {
 						commandTaskDeleteByName(options);
 					} 
 					// task delete [id]
-					else if(e.getSubcommandName().equals("id")) {
+					else if(idType.equals("id")) {
 						commandTaskDeleteById(options);
 					}
 				}
-				// task view [name/id/all]
-				else if (e.getSubcommandGroup().equals("view")) { 
-					//task view [all]
-					if(e.getSubcommandName().equals("all")) {
-						commandTaskViewAll();
-					} 
-					//task view [id]
-					else if(e.getSubcommandName().equals("id")) {
-						commandTaskViewById(options);
-					} 
-					//task view [name]
-					else if(e.getSubcommandName().equals("name")) {
-						commandTaskViewByName(options);
-					} 
+			}
+			// view
+			else if (e.getName().equals("view")) {
+				List<OptionMapping> options = e.getOptions();
+				OptionMapping firstOpt = options.get(0);
+				
+				if(firstOpt.getAsString().equals("id")) {
+					commandViewById(options);
+				} else if (firstOpt.getAsString().equals("name")) {
+					commandViewByName(options);
+				} else if (firstOpt.getAsString().equals("all")) { 
+					commandViewAll();
+				} else if (firstOpt.getAsString().equals("status")) {
+					commandViewByStatus(options);
 				}
 			}
 			// reminder
@@ -261,7 +315,7 @@ public class Controller extends Application{
 				
 				//reminder set
 				if(e.getSubcommandName().equals("set")) { 
-					commandReminder(options);
+					commandReminderSet(options);
 				}
 				//reminder view 
 				else if (e.getSubcommandName().equals("view")) {
@@ -289,29 +343,11 @@ public class Controller extends Application{
 					commandRepeatView(options);
 				} 
 			}
-		}
-		
-		public void commandBonk() {
-			ReplyAction replyLater = e.deferReply();
-			replyLater.setEphemeral(true);
-			replyLater.queue();
-			
-			InteractionHook hook = e.getHook();
-			
-			List<OptionMapping> opt = e.getOptions();
-			User user = opt.get(0).getAsUser();
-			int times = Integer.parseInt(opt.get(1).getAsString());
-			
-			System.out.println(user.getName() + " got bonked" +times+ "times");
-			Thread t1 = new Thread(()->{
-				try {
-					Thread.sleep(10000);
-				} catch (InterruptedException e1) {
-					e1.printStackTrace();
-				}
-				hook.editOriginal(user.getName() + " got bonked").queue();
-			});	
-			t1.start();
+			// status
+			else if (e.getName().equals("status")) {
+				List<OptionMapping> options = e.getOptions();
+				commandStatus(options);
+			}
 		}
 		
 		public void commandTaskCategoryCreate(List<OptionMapping> options) {
@@ -320,7 +356,6 @@ public class Controller extends Application{
 			String name = options.get(0).getAsString();
 			String desc = "";
 			Guild guild = e.getGuild(); //get currentguild
-			boolean catExists = false; //check if channel exists in guild
 			
 			//define description if any
 			if(options.size()>1) {
@@ -352,7 +387,6 @@ public class Controller extends Application{
 				}
 				if(tasksId != null ) {
 					if (sqlModel.newTaskCategory(guild.getId(), name, desc, tasksId)) {
-						System.out.println("Succeeded");
 						discordView.taskCatCreated(hook, name);
 						discordView.taskCatCreatedIntro(guild.getTextChannelById(tasksId), e.getMember().getEffectiveName(), e.getUser().getEffectiveAvatarUrl(), desc, name);
 					}
@@ -405,8 +439,6 @@ public class Controller extends Application{
 				if(!sqlModel.doesTaskExistByName(guildId, channelId, name)) {
 					task = sqlModel.createTask(guildId, channelId, name, description, e.getUser().getName(), e.getUser().getId());
 					if(task != null) {
-						System.out.println(e.getMember().getId());
-						System.out.println(e.getGuild().getMemberById(e.getMember().getId()));
 						task.retrieveNames(e.getGuild());
 						discordView.taskCreated(hook);
 						discordView.logTaskCreated(e.getTextChannel(), e.getMember().getEffectiveName(), e.getUser().getEffectiveAvatarUrl(), task);
@@ -417,7 +449,7 @@ public class Controller extends Application{
 					discordView.taskAlreadyExist(hook);
 				}
 			} else {
-				discordView.taskNotAValidChannel(hook);
+				discordView.notAValidChannel(hook);
 			}
 		}
 		
@@ -430,7 +462,7 @@ public class Controller extends Application{
 			 */
 			e.deferReply(true).queue();
 			InteractionHook hook = e.getHook();
-			String name = options.get(0).getAsString();
+			String name = options.get(1).getAsString();
 			String guildId = e.getGuild().getId();
 			String channelId = e.getTextChannel().getId();
 			DiscTask task = null;
@@ -448,7 +480,7 @@ public class Controller extends Application{
 					discordView.taskDoesntExist(hook);
 				}
 			} else {
-				discordView.taskNotAValidChannel(hook);
+				discordView.notAValidChannel(hook);
 			}
 		}
 		
@@ -461,86 +493,137 @@ public class Controller extends Application{
 			 */
 			e.deferReply(true).queue();
 			InteractionHook hook = e.getHook();
-			String id = options.get(0).getAsString();
+			String id = options.get(1).getAsString();
 			String guildId = e.getGuild().getId();
 			String channelId = e.getTextChannel().getId();
 			DiscTask task;
 			
 			//check for valid channel
 			if(sqlModel.checkValidChannel(guildId, channelId)) {
-				//check if task exist
-				if(sqlModel.doesTaskExistById(guildId, channelId, id)) {
-					task = sqlModel.getTaskById(guildId, channelId, Integer.parseInt(id));
-					task.retrieveNames(e.getGuild());
-					sqlModel.deleteTaskById(guildId, channelId, id);
-					discordView.taskDeleted(hook);
-					discordView.logTaskDeleted(e.getTextChannel(), e.getMember().getEffectiveName(), e.getUser().getEffectiveAvatarUrl(), task);
-				} else {
-					discordView.taskDoesntExist(hook);
-				}
-			} else {
-				discordView.taskNotAValidChannel(hook);
-			}
-		}
-		
-		public void commandTaskViewByName(List<OptionMapping> options) {
-			e.deferReply(true).queue();
-			InteractionHook hook = e.getHook();
-			Guild guild = e.getGuild();
-			String name = options.get(0).getAsString();
-			DiscTask task = sqlModel.getTaskByName(e.getGuild().getId(), e.getTextChannel().getId(), name);
-			
-			//get names of author adn assigned from their IDs
-			if(task != null) { 
-				task.retrieveNames(e.getGuild());
-				discordView.taskViewByName(hook, task, name);
-			} else {
-				discordView.taskDoesntExistByName(hook, name);
-			}
-		}
-		
-		public void commandTaskViewById(List<OptionMapping> options) {
-			e.deferReply(true).queue();
-			InteractionHook hook = e.getHook();
-			Guild guild = e.getGuild();
-			int id = Integer.parseInt(options.get(0).getAsString());
-			DiscTask task = sqlModel.getTaskById(e.getGuild().getId(), e.getTextChannel().getId(), id);
-			
-			//get names of author adn assigned from their IDs
-			if(task != null) { 
-				task.retrieveNames(e.getGuild());
-				discordView.taskViewById(hook, task, id);
-			} else {
-				discordView.taskDoesntExistById(hook, id);
-			}
-		}
-		
-		public void commandTaskViewAll() {
-			e.deferReply(true).queue();
-			InteractionHook hook = e.getHook();
-			Guild guild = e.getGuild();
-			List<DiscTask> tasks = sqlModel.getAllTasks(guild.getId(), e.getTextChannel().getId());
-			//get names of author adn assigned from their IDs
-			if(!tasks.isEmpty()) {
-				for(DiscTask t : tasks) { 
-					t.retrieveNames(e.getGuild());
-					
-					if(!t.getAssigned().isEmpty()) {
-						String assigned = guild.getMemberById(t.getAssigned()).getEffectiveName();
-						t.setAssigned(assigned);
+				try {
+					//check if task exist
+					if(sqlModel.doesTaskExistById(guildId, channelId, id)) {
+						task = sqlModel.getTaskById(guildId, channelId, Integer.parseInt(id));
+						task.retrieveNames(e.getGuild());
+						sqlModel.deleteTaskById(guildId, channelId, id);
+						discordView.taskDeleted(hook);
+						discordView.logTaskDeleted(e.getTextChannel(), e.getMember().getEffectiveName(), e.getUser().getEffectiveAvatarUrl(), task);
+					} else {
+						discordView.taskDoesntExist(hook);
 					}
+				} catch (NumberFormatException e) { 
+					discordView.notAValidNumber(hook, options.get(1).getAsString());
 				}
-				
-				discordView.taskViewAll(hook, tasks);
 			} else {
-				discordView.taskEmpty(hook);
+				discordView.notAValidChannel(hook);
 			}
 		}
 		
-		public void commandReminder(List<OptionMapping> options) { 
+		void commandViewByName(List<OptionMapping> options) {
 			e.deferReply(true).queue();
 			InteractionHook hook = e.getHook();
-			User targetUser = e.getUser(); //should change in the future if theres a assigned
+			String name = options.get(1).getAsString();
+			
+			if(sqlModel.checkValidChannel(e.getGuild().getId(), e.getTextChannel().getId())) {
+				DiscTask task = sqlModel.getTaskByName(e.getGuild().getId(), e.getTextChannel().getId(), name);
+				
+				//get names of author adn assigned from their IDs
+				if(task != null) { 
+					task.retrieveNames(e.getGuild());
+					discordView.taskViewByName(hook, task, name);
+				} else {
+					discordView.taskDoesntExistByName(hook, name);
+				}
+			} else {
+				discordView.notAValidChannel(hook);
+			}
+		}
+		
+		void commandViewById(List<OptionMapping> options) {
+			e.deferReply(true).queue();
+			InteractionHook hook = e.getHook();
+
+			
+			if(sqlModel.checkValidChannel(e.getGuild().getId(), e.getTextChannel().getId())) {
+				try { 
+					int id = Integer.parseInt(options.get(1).getAsString());
+				
+					DiscTask task = sqlModel.getTaskById(e.getGuild().getId(), e.getTextChannel().getId(), id);
+					
+					//get names of author adn assigned from their IDs
+					if(task != null) { 
+						task.retrieveNames(e.getGuild());
+						discordView.taskViewById(hook, task, id);
+					} else {
+						discordView.taskDoesntExistById(hook, id);
+					}
+				} catch (Exception e) { 
+					discordView.notAValidNumber(hook, options.get(1).getAsString());
+				}
+			} else {
+				discordView.notAValidChannel(hook);
+			}
+		}
+		
+		void commandViewByStatus(List<OptionMapping> options) {
+			e.deferReply(true).queue();
+			InteractionHook hook = e.getHook();
+			Guild guild = e.getGuild();
+			
+			if(sqlModel.checkValidChannel(e.getGuild().getId(), e.getTextChannel().getId())) {
+				try { 
+					int status = Integer.parseInt(options.get(1).getAsString());
+					List<DiscTask> tasks = sqlModel.getTasksByStatus(guild.getId(), e.getTextChannel().getId(), status);
+					//get names of author adn assigned from their IDs
+					if(!tasks.isEmpty()) {
+						for(DiscTask t : tasks) { 
+							t.retrieveNames(e.getGuild());
+							if(!t.getAssigned().isEmpty()) {
+								String assigned = guild.getMemberById(t.getAssigned()).getEffectiveName();
+								t.setAssigned(assigned);
+							}
+						}
+						discordView.taskViewAll(hook, tasks);
+					} else {
+						discordView.taskEmpty(hook);
+					}
+				} catch (NumberFormatException e) { 
+					discordView.notAValidNumber(hook, options.get(1).getAsString());
+				}
+			} else {
+				discordView.notAValidChannel(hook);
+			}
+		}
+		
+		void commandViewAll() {
+			e.deferReply(true).queue();
+			InteractionHook hook = e.getHook();
+			Guild guild = e.getGuild();
+			
+			if(sqlModel.checkValidChannel(e.getGuild().getId(), e.getTextChannel().getId())) {
+				List<DiscTask> tasks = sqlModel.getAllTasks(guild.getId(), e.getTextChannel().getId());
+				//get names of author adn assigned from their IDs
+				if(!tasks.isEmpty()) {
+					for(DiscTask t : tasks) { 
+						t.retrieveNames(e.getGuild());
+						if(!t.getAssigned().isEmpty()) {
+							String assigned = guild.getMemberById(t.getAssigned()).getEffectiveName();
+							t.setAssigned(assigned);
+						}
+					}
+					discordView.taskViewAll(hook, tasks);
+				} else {
+					discordView.taskEmpty(hook);
+				}
+			} else {
+				discordView.notAValidChannel(hook);
+			}
+		}
+		
+		public void commandReminderSet(List<OptionMapping> options) { 
+			e.deferReply(true).queue();
+			InteractionHook hook = e.getHook();
+			User targetUser = e.getUser();
 			long dur = 0;
 			Duration jDur = Duration.ZERO;
 			String desc = "";
@@ -610,6 +693,7 @@ public class Controller extends Application{
 				}
 				
 				//if all passes then submit to executor service
+				@SuppressWarnings("rawtypes")
 				Future f;
 				String[] dateTime = DateTimeUtility.getDateTimeOffset(jDur);
 				Reminder r = new Reminder(task, targetUser, e.getMember(), e.getGuild().getMember(targetUser), reminderIdx, dateTime);
@@ -629,7 +713,7 @@ public class Controller extends Application{
 					discordView.reminderSetPublic(hook, r, e.getTextChannel());
 				}
 			} else {
-				discordView.taskNotAValidChannel(hook);
+				discordView.notAValidChannel(hook);
 			}
 		}
 		
@@ -729,12 +813,13 @@ public class Controller extends Application{
 				repeaterMap.put(repeaterIdx, r);
 				repeaterIdx++;
 				r.setDesc(description);
+				@SuppressWarnings("rawtypes")
 				Future f = repeaterExecutor.scheduleAtFixedRate(r, delay, period, TimeUnit.SECONDS);
 				r.setFuture(f);
 				r.setNextRepeat(DateTimeUtility.getDateTimeOffset(Duration.of(delay, ChronoUnit.SECONDS)));
 				discordView.repeatSet(hook,r);
 			} else {
-				discordView.taskNotAValidChannel(hook);
+				discordView.notAValidChannel(hook);
 			}
 		}
 		
@@ -755,16 +840,46 @@ public class Controller extends Application{
 		
 		public void commandRepeatDelete(List<OptionMapping> options) { 
 			e.deferReply(true).queue();
-			int id = Integer.parseInt(options.get(0).getAsString());
+			int id;
 			InteractionHook hook = e.getHook();
-			Repeater targetRepeater = repeaterMap.get(id);
+			Repeater targetRepeater;
 			
-			if(targetRepeater != null) { 
-				targetRepeater.future.cancel(false);
-				repeaterMap.remove(id);
-				discordView.repeaterCancelled(hook, targetRepeater);
-			} else {
-				discordView.repeaterDosentExist(hook, id);
+			try { 
+				id = Integer.parseInt(options.get(0).getAsString());
+				targetRepeater = repeaterMap.get(id);
+				if(targetRepeater != null) { 
+					targetRepeater.future.cancel(false);
+					repeaterMap.remove(id);
+					discordView.repeaterCancelled(hook, targetRepeater);
+				} else {
+					discordView.repeaterDosentExist(hook, id);
+				}
+			} catch (NumberFormatException e) { 
+				discordView.notAValidNumber(hook, options.get(0).getAsString());
+			}
+			
+		}
+		
+		void commandStatus(List<OptionMapping> options) { 
+			e.deferReply(true).queue();
+			InteractionHook hook = e.getHook();
+			
+			String firstOpt = options.get(0).getAsString();
+			DiscTask task = null;
+			
+			try {
+				int status = Integer.parseInt(options.get(2).getAsString());
+				if(firstOpt.equalsIgnoreCase("id")) { 
+					int id = Integer.parseInt(options.get(1).getAsString());
+					task = sqlModel.updateTaskStatus(id, e.getGuild().getId(), e.getTextChannel().getId(), status);
+				} else if (firstOpt.equalsIgnoreCase("name")) { 
+					String name = options.get(1).getAsString();
+					task = sqlModel.updateTaskStatus(name, e.getGuild().getId(), e.getTextChannel().getId(), status);
+				}
+				discordView.statusUpdated(hook, task);
+				discordView.logTaskStatusUpdate(e.getTextChannel(), e.getMember().getEffectiveName(), e.getUser().getEffectiveAvatarUrl(), task);
+			} catch (NumberFormatException e) { 
+				discordView.notAValidNumber(hook, "");
 			}
 		}
 	}

@@ -1,7 +1,6 @@
 package utilities;
 
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -34,6 +33,26 @@ public class DateTimeUtility {
 	
 	public static String[] getDateTimeOffset(Duration dur) {
 		LocalDateTime dt = LocalDateTime.now().plus(dur);
+		String[] res = new String[2];
+		
+		res[0] = dt.toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE);
+		res[1] = dt.toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
+		
+		return res;
+	}
+	
+	public static String[] getDateTimeNow(String timeFormat, String yearFormat) {
+		LocalDateTime dt = LocalDateTime.now();
+		String[] res = new String[2];
+		
+		res[0] = dt.toLocalDate().format(DateTimeFormatter.ofPattern(yearFormat));
+		res[1] = dt.toLocalTime().format(DateTimeFormatter.ofPattern(timeFormat));
+		
+		return res;
+	}
+	
+	public static String[] getDateTimeNow() {
+		LocalDateTime dt = LocalDateTime.now();
 		String[] res = new String[2];
 		
 		res[0] = dt.toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE);

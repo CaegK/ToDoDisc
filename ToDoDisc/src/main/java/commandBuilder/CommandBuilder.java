@@ -21,6 +21,7 @@ import java.util.List;
 
 import com.google.gson.Gson;
 
+@SuppressWarnings({ "unchecked", "rawtypes", "unused" })
 public class CommandBuilder {
 	// COMMAND TYPES
 	final static int COMMAND_TYPE_CHAT = 1;
@@ -37,6 +38,8 @@ public class CommandBuilder {
 	final static int COMMAND_OPTION_ROLE = 8;
 	final static int COMMAND_OPTION_MENTIONABLE = 9;
 	final static int COMMAND_OPTION_NUMBER = 10;
+	//COMMANDS
+	final public static String[] COMMANDS = {"taskcategory", "task", "view", "reminder", "repeat", "status"};
 	
 	HttpClient client;
 	HttpRequest req;
@@ -44,18 +47,6 @@ public class CommandBuilder {
 	String appId;
 	String guildId;
 	Gson gson;
-
-	public static void main(String[] args) {
-		Gson gson = new Gson(); 
-		String token = "ODc0ODg4MjIwNjQ5ODY1Mjc2.YRNhJg.bwQJCma7xVZCw7URvL1t2Ny0zgQ";
-		String appId = "874888220649865276";
-		String guildId = "810895462084116481";
-		CommandBuilder c = new CommandBuilder(token, appId, guildId);
-		
-		c.updateRepeatCommand();
-//		c.deleteCommand("876135478775148585");
-//		System.out.println( c.getCommands());
-	}
 	
 	public CommandBuilder(String token, String appId, String guildId) {
 		this.token = token;
@@ -67,8 +58,29 @@ public class CommandBuilder {
 		gson = new Gson();
 	}
 	
-	public void updateTaskCatCommand() { 
+	public int[] updateAllCommands() { 
+		int[] res = new int[6];
 		
+		try {
+		res[0] = updateTaskCatCommand();
+		Thread.sleep(5000);
+		res[1] = updateTaskCommand();
+		Thread.sleep(5000);
+		res[2] = updateViewCommand();
+		Thread.sleep(5000);
+		res[3] = updateReminderCommand();
+		Thread.sleep(5000);
+		res[4] = updateRepeatCommand();
+		Thread.sleep(5000);
+		res[5] = updateStatusCommand();
+		} catch (Exception e) { 
+			e.printStackTrace();
+		}
+		
+		return res;
+	}
+	
+	public int updateTaskCatCommand() { 
 		/*
 		 *  TASKCATEGORY COMMANDS
 		 */
@@ -84,54 +96,93 @@ public class CommandBuilder {
 		taskCatCreateSub.setOptions(List.of(taskCatCreateName, taskCatCreateDesc));
 		taskCatCommand.setOptions(List.of(taskCatCreateSub, taskCatDelSub));
 		
-		updateCommands(taskCatCommand);
+		return updateCommands(taskCatCommand);
 	}
 	
-	public void updateTaskCommand() {
+//	public int updateTaskCommand() {
+//		/*
+//		 *  TASK COMMANDS
+//		 */
+//		// /task
+//		Command taskCommand = new Command(COMMAND_TYPE_CHAT, "task", "Manage or view tasks. Can only be used in task channels.", true);
+//		//subcommands /task [create/delete]
+//		CommandOption taskCreateSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "create", "Create a task in this task category", true);
+//		CommandOption taskDeleteSubGrp = new CommandOption(COMMAND_OPTION_SUB_COMMAND_GROUP, "delete", "Delete a task in this task category", false);
+//		//create subcommand options  /task create [name] [description]
+//		CommandOption taskCreateName = new CommandOption(COMMAND_OPTION_STRING, "name", "Name of task", true);
+//		CommandOption taskCreateDesc = new CommandOption(COMMAND_OPTION_STRING, "description", "Description of task", false);
+//		taskCreateSub.setOptions(List.of(taskCreateName, taskCreateDesc));
+//		//delete subcommand group options /task delete [name/id] 
+//		CommandOption taskDeleteNameSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "name", "Delete a task based on it's name", true);
+//		CommandOption taskDeleteNameSubOpt = new CommandOption(COMMAND_OPTION_STRING, "name", "Task's name", true);
+//		taskDeleteNameSub.setOptions(List.of(taskDeleteNameSubOpt));
+//		
+//		CommandOption taskDeleteIdSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "id", "Delete a task based on it's ID", true);
+//		CommandOption taskDeleteIdSubOpt = new CommandOption(COMMAND_OPTION_INTEGER, "id", "Task's id", true);
+//		taskDeleteIdSub.setOptions(List.of(taskDeleteIdSubOpt));
+//		
+//		taskDeleteSubGrp.setOptions(List.of(taskDeleteNameSub, taskDeleteIdSub));
+//		
+//		taskCommand.setOptions(List.of(taskCreateSub, taskDeleteSubGrp));
+//		
+//		return updateCommands(taskCommand);
+//	}
+	
+	public int updateTaskCommand() { 
 		/*
-		 *  TASK COMMANDS
+		 * TASK COMMANDS
 		 */
 		// /task
 		Command taskCommand = new Command(COMMAND_TYPE_CHAT, "task", "Manage or view tasks. Can only be used in task channels.", true);
-		//subcommands /task [create/delete]
-		CommandOption taskCreateSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "create", "Create a task in this task category", true);
-		CommandOption taskDeleteSubGrp = new CommandOption(COMMAND_OPTION_SUB_COMMAND_GROUP, "delete", "Delete a task in this task category", false);
-		//create subcommand options  /task create [name] [description]
-		CommandOption taskCreateName = new CommandOption(COMMAND_OPTION_STRING, "name", "Name of task", true);
-		CommandOption taskCreateDesc = new CommandOption(COMMAND_OPTION_STRING, "description", "Description of task", false);
-		taskCreateSub.setOptions(List.of(taskCreateName, taskCreateDesc));
-		//delete subcommand group options /task delete [name/id] 
-		CommandOption taskDeleteNameSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "name", "Delete a task based on it's name", true);
-		CommandOption taskDeleteNameSubOpt = new CommandOption(COMMAND_OPTION_STRING, "name", "Task's name", true);
-		taskDeleteNameSub.setOptions(List.of(taskDeleteNameSubOpt));
+		// /task [create/delete]
+		CommandOption taskCreate = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "create", "Create a task", true);
+		CommandOption taskDelete = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "delete", "Delete a task", true);
+		taskCommand.setOptions(List.of(taskCreate, taskDelete));
+		// /task [create] [name] <description>
+		CommandOption taskName = new CommandOption(COMMAND_OPTION_STRING, "name", "Task name", true);
+		CommandOption taskDesc = new CommandOption(COMMAND_OPTION_STRING, "description", "Task description", false);
+		taskCreate.setOptions(List.of(taskName, taskDesc));
+		// /task [delete] [id/name] 
+		CommandOption taskIdNameCho = new CommandOption(COMMAND_OPTION_STRING, "id_type", "Identify a task by id or name", true);
+		CommandChoice taskDelName = new CommandChoice("name", "name");
+		CommandChoice taskDelId = new CommandChoice("id", "id");
+		taskIdNameCho.setChoices(List.of(taskDelName, taskDelId));
+		// /task [delete] [id/name] [input]
+		CommandOption taskDelInput = new CommandOption(COMMAND_OPTION_STRING, "identifier", "Id or name", true);
 		
-		CommandOption taskDeleteIdSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "id", "Delete a task based on it's ID", true);
-		CommandOption taskDeleteIdSubOpt = new CommandOption(COMMAND_OPTION_INTEGER, "id", "Task's id", true);
-		taskDeleteIdSub.setOptions(List.of(taskDeleteIdSubOpt));
+		taskDelete.setOptions(List.of(taskIdNameCho, taskDelInput));
 		
-		taskDeleteSubGrp.setOptions(List.of(taskDeleteNameSub, taskDeleteIdSub));
-		
-		//View tasks /task view [name/id/all]
-		CommandOption taskViewSubGrp = new CommandOption(COMMAND_OPTION_SUB_COMMAND_GROUP, "view", "View task(s) based on ID or name or all", false);
-		
-		CommandOption taskViewIdSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "id", "View tasks based on id", true);
-		CommandOption taskViewIdOpt = new CommandOption(COMMAND_OPTION_STRING, "id", "Id of task", true);
-		taskViewIdSub.setOptions(List.of(taskViewIdOpt));
-		
-		CommandOption taskViewNameSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "name", "View tasks based on name", true);
-		CommandOption taskViewNameOpt = new CommandOption(COMMAND_OPTION_STRING, "name", "name of task", true);
-		taskViewNameSub.setOptions(List.of(taskViewNameOpt));
-		
-		CommandOption taskViewAllSub = new CommandOption(COMMAND_OPTION_SUB_COMMAND, "all", "View all tasks", true);
-		
-		taskViewSubGrp.setOptions(List.of(taskViewIdSub, taskViewNameSub, taskViewAllSub));
-		
-		taskCommand.setOptions(List.of(taskViewSubGrp,taskCreateSub, taskDeleteSubGrp));
-		
-		updateCommands(taskCommand);
+		return updateCommands(taskCommand);
 	}
 	
-	public void updateReminderCommand() {
+	public int updateViewCommand() { 
+		/*
+		 * VIEW COMMANDS
+		 */
+		
+		// /view 
+		Command viewCommand = new Command(COMMAND_TYPE_CHAT, "view", "View specific task(s) by name, id or status", true);
+		// /view [id/name/all/status]
+		CommandOption viewOpt = new CommandOption(COMMAND_OPTION_STRING, "criteria", "Search criteria", true);
+		CommandChoice viewId = new CommandChoice("id", "id");
+		CommandChoice viewName = new CommandChoice("name", "name");
+		CommandChoice viewAll = new CommandChoice("all", "all");
+		CommandChoice viewStatus = new CommandChoice("status", "status");
+		viewOpt.setChoices(List.of(viewId, viewName, viewAll, viewStatus));
+		// /view [id/name/all/status] [input]
+		CommandOption viewInput = new CommandOption(COMMAND_OPTION_STRING, "identifier", "Task ID or name", true);
+		// /view [id/name/all/status] [input] [name/id/status]
+		CommandOption viewSortOpt = new CommandOption(COMMAND_OPTION_STRING, "sort", "Sort selected task by name, ID or status", false);
+		CommandChoice viewSortId = new CommandChoice("id", "id");
+		CommandChoice viewSortName = new CommandChoice("name", "name");
+		CommandChoice viewSortStatus = new CommandChoice("status", "status");
+		viewSortOpt.setChoices(List.of(viewSortId, viewSortName, viewSortStatus));
+		
+		viewCommand.setOptions(List.of(viewOpt, viewInput, viewSortOpt));
+		return updateCommands(viewCommand);
+	}
+	
+	public int updateReminderCommand() {
 		/*
 		 * REMINDER COMMANDS
 		 */
@@ -164,10 +215,10 @@ public class CommandBuilder {
 		
 		remCommand.setOptions(List.of(remDelSub, remViewSub, remSetSub));
 		
-		updateCommands(remCommand);
+		return updateCommands(remCommand);
 	}
 	
-	public void updateRepeatCommand() {
+	public int updateRepeatCommand() {
 		/*
 		 * REPEAT COMMANDs /repeat set [id/name] [input] [target hr] [target min] <day> <hour> <min> <description>
 		 */
@@ -200,10 +251,31 @@ public class CommandBuilder {
 		
 		repeatSetSub.setOptions(List.of(repeatIdNameOpt, repeatInputOpt, repeatTHrOpt, repeatTMinOpt, repeatDayOpt, repeatHourOpt, repeatMinOpt, repeatDescOpt));
 		repeatCommand.setOptions(List.of(repeatSetSub, repeatDelSub, repeatViewSub));
-		updateCommands(repeatCommand);
+		return updateCommands(repeatCommand);
 	}
 	
-	public String getCommands() {
+	public int updateStatusCommand() { 
+		/*
+		 * STATUS COMMAND /status [id/name] [input] [status]
+		 */
+		// /status
+		Command statusCommand = new Command(COMMAND_TYPE_CHAT, "status", "change the status of a task", true);
+		// /status [id/name]
+		CommandOption statusIdNameOpt = new CommandOption(COMMAND_OPTION_STRING, "id_type", "Identify a task by ID or name", true);
+		CommandChoice statusIdCho = new CommandChoice("id", "id");
+		CommandChoice statusNameCho = new CommandChoice("name", "name");
+		statusIdNameOpt.setChoices(List.of(statusIdCho, statusNameCho));
+		// /status [id/name] [input]
+		CommandOption statusInputOpt = new CommandOption(COMMAND_OPTION_STRING, "identifier", "id or name", true);
+		// /status [id/name] [input] [status]
+		CommandOption statusStatusOpt = new CommandOption(COMMAND_OPTION_INTEGER, "status", "status code to update to", true);
+		
+		statusCommand.setOptions(List.of(statusIdNameOpt, statusInputOpt, statusStatusOpt));
+		
+		return updateCommands(statusCommand);
+	}
+	
+	private String getCommands() {
 		req = HttpRequest.newBuilder()
 				.uri(URI.create("https://discord.com/api/v8/applications/"+appId+ "/guilds/"+ guildId + "/commands"))
 				.header("Content-Type", "application/json")
@@ -219,7 +291,7 @@ public class CommandBuilder {
 		} 
 	}
 	
-	public void deleteCommand(String id) {
+	private void deleteCommand(String id) {
 		req = HttpRequest.newBuilder()
 				.uri(URI.create("https://discord.com/api/v8/applications/"+appId+"/guilds/"+ guildId + "/commands/"+id))
 				.header("Content-Type", "application/json")
@@ -235,7 +307,7 @@ public class CommandBuilder {
 		} 
 	}
 	
-	public void updateCommands(Command c) {
+	private int updateCommands(Command c) {
 		try {
 			req = HttpRequest.newBuilder()
 					.uri(URI.create("https://discord.com/api/v8/applications/"+appId+"/guilds/"+ guildId + "/commands"))
@@ -244,12 +316,10 @@ public class CommandBuilder {
 //					.POST(BodyPublishers.ofFile(Paths.get("src/main/resources/test2.json")))
 					.POST(BodyPublishers.ofString(gson.toJson(c)))
 					.build();
-			FileWriter f = new FileWriter(new File("./commands.json"));
-			f.write(gson.toJson(c));
-			f.flush();
 			HttpResponse<String> resp = client.send(req, BodyHandlers.ofString());
 			System.out.println("Upsert commands response code: " + resp.statusCode());
 			System.out.println("Upsert commands response body: " + resp.body());
+			return resp.statusCode();
 		} catch (FileNotFoundException e1) {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
@@ -260,9 +330,11 @@ public class CommandBuilder {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		
+		return -1;
 	}
 	
-	public static class Command {
+	private static class Command {
 		int type;
 		String guild_id;
 		String name;
@@ -328,7 +400,7 @@ public class CommandBuilder {
 		
 	}
 	
-	public static class CommandOption{
+	private static class CommandOption{
 		int type;
 		String name;
 		String description;
@@ -396,7 +468,7 @@ public class CommandBuilder {
 		
 	}
 	
-	public static class CommandChoice<T>{
+	private static class CommandChoice<T>{
 		String name;
 		T value;
 		

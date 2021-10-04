@@ -4,6 +4,7 @@
 
 .root .label{
 	-fx-text-fill: white;
+	-fx-font-size: 16;
 }
 
 .root-grid{ 
@@ -11,7 +12,7 @@
 	-fx-vgap: 15;
 }
 
-#welcome-label{
+#welcome-label {
 	-fx-font-size: 72;
 	-fx-font-style: italic;
 }
@@ -28,16 +29,33 @@
 	-fx-font-size: 16;
 }
 
-#connect-button{
+.connect-button{
 	-fx-background-color: derive(default-background, 10%);
 	-fx-text-fill: white;
 	-fx-font-size: 14;
 }
 
-#connect-button:hover{
+.connect-button:hover{
 	-fx-background-color: derive(default-background, 30%);
 }
 
-#connect-button:pressed{
+.connect-button:pressed{
 	-fx-background-color: derive(default-background, 50%);
 }
+
+.status-label{
+	-fx-font-size: 16;
+}
+
+.online {
+	-fx-text-fill: RGB(100, 255, 100);
+}
+
+.offline {
+	-fx-text-fill: RGB(255, 100, 100);
+}
+
+
+	
+
+

@@ -9,28 +9,25 @@ import javax.security.auth.login.LoginException;
 import application.Controller;
 import application.Controller.Reminder;
 import application.Controller.Repeater;
+import commandBuilder.CommandBuilder;
 import dialog.ErrorDialog;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.entities.Category;
-import net.dv8tion.jda.api.entities.Guild;
-import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.MessageEmbed.Field;
 import net.dv8tion.jda.api.entities.TextChannel;
-import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
 import net.dv8tion.jda.api.interactions.InteractionHook;
-import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.requests.GatewayIntent;
-import net.dv8tion.jda.api.requests.restaction.interactions.ReplyAction;
 import net.dv8tion.jda.api.utils.MemberCachePolicy;
 import utilities.DateTimeUtility;
 import utilities.DiscTask;
 
 public class DiscordView {
 	Controller controller;
-	JDA jda;
+	public JDA jda;
 	/*
 	 * COLORS
 	 */
@@ -47,11 +44,22 @@ public class DiscordView {
 			jdaBuilder.addEventListeners(new DiscordListener());
 			jda = jdaBuilder.build();
 			jda.awaitReady();
-			System.out.println("JDA Ready lets gooo");
 		} catch (LoginException e) {
 			ErrorDialog.showErrorDialog(null, "Invalid Token", true);
 		} catch (InterruptedException e) {
 			e.printStackTrace();
+		}
+	}
+	
+	public boolean getJdaStatus() { 
+		if(jda != null) { 
+			if(jda.getStatus() == JDA.Status.CONNECTED) { 
+				return true;
+			} else {
+				return false;
+			}
+		} else {
+			return false;
 		}
 	}
 	
@@ -60,11 +68,43 @@ public class DiscordView {
 		public void onSlashCommand(SlashCommandEvent e) {
 			controller.processSlashCommand(e);
 		}
+		
+		@Override
+		public void onMessageReceived(MessageReceivedEvent e) { 
+			if(e.isFromGuild()) { 
+				if(e.getMessage().getContentRaw().trim().equalsIgnoreCase("!tododisc1")) { 
+					String appId = e.getJDA().retrieveApplicationInfo().complete().getId();
+					int[] res = controller.setupCommand(appId, e.getGuild().getId());
+					
+					setupMsg(e.getTextChannel(), res);
+					e.getMessage().delete().queue();
+				}
+			}
+		}
 	}
 	
 	/*
 	 * Response functions
 	 */
+	public void setupMsg(TextChannel channel, int[] res) {
+		Field[] fields = new Field[res.length];
+		
+		EmbedBuilder eb = new EmbedBuilder();
+		eb.setColor(Color.ORANGE);
+		eb.setTitle("Slash Commands");
+		
+		for(int i=0; i<res.length; i++) { 
+			if(res[i] == 201) { 
+				fields[i] = new Field("/" + CommandBuilder.COMMANDS[i], "Successfully setup", false);
+			} else if (res[i] == 200) { 
+				fields[i] = new Field("/" + CommandBuilder.COMMANDS[i], "Already setup", false);
+			} else {
+				fields[i] = new Field("/" + CommandBuilder.COMMANDS[i], "Error setting up", false);
+			}
+			eb.addField(fields[i]);
+		}
+		channel.sendMessageEmbeds(eb.build()).queue();
+	}
 	
 	/*
 	 * TASK CATEGORY
@@ -101,7 +141,7 @@ public class DiscordView {
 		//Intro msg
 		EmbedBuilder eb = new EmbedBuilder();
 		
-		eb.setTitle(name)
+		eb.setTitle("Task category `" + name + "` created and is associated with this text channel")
 		.setFooter(author, avatarUrl)
 		.setDescription("Date: `" + LocalDate.now().toString() + "` \n"
 				+"Time: `" + DateTimeUtility.getTimeSecond() + "`\n");
@@ -116,11 +156,6 @@ public class DiscordView {
 	/*
 	 * TASK
 	 */
-	
-	public void taskNotAValidChannel(InteractionHook hook) {
-		hook.editOriginal("Not a valid channel la dumfuk").queue();
-	}
-	
 	public void taskAlreadyExist(InteractionHook hook) { 
 		hook.editOriginal("Task with the same name already exists in this task category").queue();
 	}
@@ -420,6 +455,13 @@ public class DiscordView {
 	}
 	
 	/*
+	 * STATUS
+	 */
+	public void statusUpdated(InteractionHook hook, DiscTask task) { 
+		hook.editOriginal(task.getName() + "'s status updated successfully").queue();
+	}
+	
+	/*
 	 * LOG
 	 */
 	
@@ -457,6 +499,18 @@ public class DiscordView {
 		channel.sendMessageEmbeds(eb.build()).queue();
 	}
 	
+	public void logTaskStatusUpdate(TextChannel channel, String author, String avatar, DiscTask task) { 
+		EmbedBuilder eb = new EmbedBuilder();
+		
+		eb.setColor(Color.PINK);
+		
+		eb.setTitle("Updated task `" + task.getName() + "`'s status")
+		.setDescription(task.format())
+		.setFooter(author, avatar);
+		
+		channel.sendMessageEmbeds(eb.build()).queue();
+	}
+	
 	/*
 	 * ERRORS
 	 */
@@ -478,8 +532,13 @@ public class DiscordView {
 	}
 	
 	public void repeatInvalidTime(InteractionHook hook) { 
-		hook.sendMessageEmbeds(new EmbedBuilder().setTitle("Please set a valid target time").setColor(Color.red).build()).queue();
+		hook.sendMessageEmbeds(new EmbedBuilder().setTitle("Please set a valid target time.").setColor(Color.red).build()).queue();
 	}
+	
+	public void notAValidChannel(InteractionHook hook) {
+		hook.sendMessageEmbeds(new EmbedBuilder().setTitle("This not a valid channel.").setColor(Color.red).build()).queue();
+	}
+	
 	
 	/*
 	 * DEBUG

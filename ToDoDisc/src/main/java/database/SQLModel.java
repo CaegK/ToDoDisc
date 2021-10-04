@@ -6,21 +6,18 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.dbutils.DbUtils;
-import org.apache.commons.dbutils.QueryRunner;
 import org.apache.commons.dbutils.ResultSetHandler;
-import org.apache.commons.dbutils.handlers.ArrayListHandler;
 import org.hsqldb.server.Server;
 
 import utilities.DateTimeUtility;
 import utilities.DiscTask;
 
 public class SQLModel {
-	Server sqlServer = new Server();
+	Server sqlServer;
 	
 	String dbAlias = "taskdb";
 	ResultSetHandler<List<String>> getStringResultHandler = (rs) -> {
@@ -32,6 +29,15 @@ public class SQLModel {
 	};
 	
 	public SQLModel() {
+		init();
+	}
+	
+	public void restartConnection() { 
+		init();
+	}
+	
+	private void init() { 
+		sqlServer = new Server();
 		sqlServer.setDatabaseName(0, dbAlias);
 		sqlServer.setDatabasePath(0, "database/tasks_database");
 		sqlServer.setSilent(true);
@@ -196,7 +202,6 @@ public class SQLModel {
 		try {
 			sqlConn = DriverManager.getConnection("jdbc:hsqldb:hsql://localhost/"+dbAlias, "SA", "");
 			int catId = getTaskCatIdFromChannel(guildId, channelId);
-			System.out.println("Cat id:" + catId);
 			delTasks = sqlConn.prepareStatement("DELETE FROM \"ToDoDisc\".tasks WHERE category_id = " + catId);
 			delTasks.execute();
 			delTaskCatOverview = sqlConn.prepareStatement("DELETE FROM \"ToDoDisc\".categories WHERE (guild_id = '"+guildId+"' AND main_channel='"+channelId+"')");
@@ -222,7 +227,6 @@ public class SQLModel {
 					.executeQuery();
 			if(res.next()) {
 				ids = res.getString(1);
-				System.out.println("id0 = " + ids);
 			} else {
 				ids = "";
 			}
@@ -305,7 +309,6 @@ public class SQLModel {
 	
 	public DiscTask createTask(String guildId, String channelId, String name, String description, String author, String authorId) { 
 		Connection sqlConn = null;
-		boolean success = false;
 		DiscTask task = null;
 		String time = DateTimeUtility.getTimeSecond();
 		
@@ -426,6 +429,44 @@ public class SQLModel {
 		return tasks;
 	}
 	
+	public List<DiscTask> getTasksByStatus(String guildId, String channelId, int status) {
+		List<DiscTask> tasks = new ArrayList<DiscTask>();
+		Connection sqlConn = null;
+		
+		try {
+			sqlConn = DriverManager.getConnection("jdbc:hsqldb:hsql://localhost/"+dbAlias, "SA", "");
+			ResultSet res = sqlConn.prepareStatement("select \r\n"
+					+ "ID, TASKS.NAME AS TASK_NAME, CATEGORIES.NAME AS CATEGORY_NAME, STATUS, AUTHOR_ID, ASSIGNED_ID, DATE, TIME, DESCRIPTION\r\n"
+					+ "FROM\r\n"
+					+ "\"ToDoDisc\".TASKS AS TASKS\r\n"
+					+ "INNER JOIN\r\n"
+					+ "\"ToDoDisc\".CATEGORIES AS CATEGORIES\r\n"
+					+ "ON \r\n"
+					+ "TASKS.CATEGORY_ID = CATEGORIES.ID \n"
+					+ "WHERE \n"
+					+ "CATEGORIES.GUILD_ID = '" + guildId +"' AND CATEGORIES.MAIN_CHANNEL = '"+channelId+"' AND TASKS.STATUS = " + status)
+					.executeQuery();
+			while(res.next()) {
+				DiscTask t = new DiscTask(res.getString(2).trim())
+						.setId(res.getString(1).trim())
+						.setCategory(res.getString(3).trim())
+						.setStatus(res.getInt(4))
+						.setAuthor(res.getString(5).trim())
+						.setAssigned(res.getString(6).trim())
+						.setDate(res.getString(7).trim())
+						.setTime(res.getString(8).trim())
+						.setDesc(res.getString(9).trim());
+				tasks.add(t);
+			}
+		} catch (SQLException e) { 
+			e.printStackTrace();
+		} finally { 
+			DbUtils.closeQuietly(sqlConn);
+		}
+		
+		return tasks;
+	}
+	
 	public DiscTask getTaskByName(String guildId, String channelId, String name) {
 		DiscTask task = null;
 		Connection sqlConn = null;
@@ -500,7 +541,59 @@ public class SQLModel {
 		return task;
 	}
 	
+	public DiscTask updateTaskStatus(int id, String guildId, String channelId, int status) { 
+		Connection sqlConn = null;
+		
+		try {
+			int catId = getTaskCatIdFromChannel(guildId, channelId);
+			
+			sqlConn = DriverManager.getConnection("jdbc:hsqldb:hsql://localhost/"+dbAlias, "SA", "");
+			sqlConn.prepareStatement("UPDATE \"ToDoDisc\".TASKS "
+					+ "SET STATUS = " + status 
+					+ " WHERE CATEGORY_ID = " + catId + " AND ID = " + id)
+					.execute();
+			
+			return getTaskById(guildId, channelId, id);
+		} catch (SQLException e) { 
+			e.printStackTrace();
+		} finally { 
+			DbUtils.closeQuietly(sqlConn);
+		}
+		
+		return null;
+	}
+	
+	public DiscTask updateTaskStatus(String name, String guildId, String channelId, int status) { 
+		Connection sqlConn = null;
+		
+		try {
+			int catId = getTaskCatIdFromChannel(guildId, channelId);
+			
+			sqlConn = DriverManager.getConnection("jdbc:hsqldb:hsql://localhost/"+dbAlias, "SA", "");
+			sqlConn.prepareStatement("UPDATE \"ToDoDisc\".TASKS "
+					+ "SET STATUS = " + status 
+					+ "WHERE CATEGORY_ID = " + catId + " AND NAME = " + name)
+					.execute();
+			return getTaskByName(guildId, channelId, name);
+		} catch (SQLException e) { 
+			e.printStackTrace();
+		} finally { 
+			DbUtils.closeQuietly(sqlConn);
+		}
+		
+		return null;
+	}
+	
 	public void close() {
 		sqlServer.shutdown();
+	}
+	
+	public boolean isConnected() { 
+		try { 
+			sqlServer.checkRunning(true);
+			return true;
+		} catch (Exception e) { 
+			return false;
+		}
 	}
 }
